@@ -1,0 +1,1846 @@
+{
+  "name": "AI University Management System",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "baddcf25-b1ef-4357-ab70-3579b2ec5875",
+      "name": "On Telegram Message1",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -1872,
+        832
+      ],
+      "webhookId": "489e6655-de7f-4aaa-a600-bfc7103ea4a3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "voice",
+              "leftValue": "={{ $json.message.voice.file_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "af127c70-74f2-44be-94be-e592ceadf1f6",
+      "name": "Is Voice?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1648,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $(\"On Telegram Message1\").item.json.message.voice.file_id }}",
+        "additionalFields": {}
+      },
+      "id": "6dab31d4-22e8-4447-88a0-39d89b93ea48",
+      "name": "Download Voice",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1424,
+        928
+      ],
+      "retryOnFail": true,
+      "webhookId": "af9bc6bc-20e2-4b40-8f69-4a760086caa4"
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {}
+      },
+      "id": "1387bb99-061b-4c4a-8675-408fe6e872ec",
+      "name": "Transcribe Voice",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -1200,
+        928
+      ],
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = $('On Telegram Message1').first().json;\nconst m = t.message || {};\nconst transcript = ($input.first().json.text || $input.first().json.transcription || '').toString().trim();\nreturn [{ json: {\n  text: transcript,\n  caption: '',\n  documentMime: '',\n  chat: m.chat || {}\n} }];\n"
+      },
+      "id": "93b48a1f-bcd0-4e35-9cb7-2767155cceac",
+      "name": "Build Voice Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -976,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an intent classifier for a university course Telegram bot. Read the incoming student message and classify it into EXACTLY ONE of these intents:\n\n- question   -> the user is asking about the course or requesting their own academic data (grades, attendance, courses, instructors, etc.).\n- submission -> the user is submitting an assignment file. If the attached document mime type is application/pdf, ALWAYS return submission.\n- problem    -> the user is reporting a problem, complaint, or difficulty, or is asking to talk to / contact the professor or doctor, in ANY phrasing or language.\n- invalid    -> anything else: empty messages, greetings/small talk, stickers, non-PDF files, or content that is none of the above.\n\nMESSAGE DETAILS:\nText: \"{{ $json.text }}\"\nCaption: \"{{ $json.caption }}\"\nAttached document mime type: \"{{ $json.documentMime }}\"\n\nRespond with ONLY one word, all lowercase, no punctuation or explanation: question, submission, problem, or invalid.",
+        "batching": {}
+      },
+      "id": "e95aa969-be60-4df5-abb6-21cf7d375edd",
+      "name": "Classify Intent",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -752,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "568b2baf-0807-45e4-bcfd-3e4321d0e075",
+      "name": "Gemini (Classifier)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -528,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cls = ($input.first().json.text || $input.first().json.response || '').toString().toLowerCase().trim();\nlet intent = 'invalid';\nif (cls.indexOf('submission') !== -1) intent = 'submission';\nelse if (cls.indexOf('problem') !== -1) intent = 'problem';\nelse if (cls.indexOf('question') !== -1) intent = 'question';\nfunction safe(n){ try { return $(n).first().json; } catch (e) { return null; } }\nconst norm = safe('Build Normalized Text') || safe('Build Voice Message') || {};\nconst trigMsg = ($('On Telegram Message1').first().json.message) || {};\nreturn [{ json: {\n  intent: intent,\n  text: (norm.text || '').toString(),\n  caption: (norm.caption || '').toString(),\n  documentMime: (norm.documentMime || '').toString(),\n  message: trigMsg,\n  chat: trigMsg.chat || norm.chat || {}\n} }];\n"
+      },
+      "id": "2b4baa82-d8df-47e4-a72f-4f3c16d45545",
+      "name": "Prepare Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "is-question",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "question",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "question"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "is-submission",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "submission",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "submission"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "is-problem",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "problem",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "problem"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "is-invalid",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "invalid",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "invalid"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "invalid"
+        }
+      },
+      "id": "73df0c35-8783-46f5-96b0-90ad14e341bb",
+      "name": "Route Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -176,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "message": "Please verify your identity to access your data. Choose your role and enter your email and password.",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Role",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Student"
+                  },
+                  {
+                    "option": "Professor"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Password",
+              "fieldType": "password",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {}
+          },
+          "appendAttribution": false
+        }
+      },
+      "id": "47fa6429-1954-4be6-8f13-cd3dcdd90e22",
+      "name": "Auth Form",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        48,
+        256
+      ],
+      "webhookId": "9f8beb35-5774-4eff-9268-96be9ab0a684"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "profiles",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Auth Form\").item.json.data.Email }}"
+            },
+            {
+              "keyName": "password",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Auth Form\").item.json.data.Password }}"
+            }
+          ]
+        }
+      },
+      "id": "d598b3ea-913b-4953-b734-0f191635f0bb",
+      "name": "Get Profile",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        272,
+        256
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "82c74864-3ba2-405a-917a-c89dc0d07aad",
+      "name": "Profile Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        496,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "role",
+              "leftValue": "={{ $json.role }}",
+              "rightValue": "student",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "24359f5e-5c7b-4e18-88f5-ddefe1ab5296",
+      "name": "Is Student Role?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        720,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://yzhwaenvwmjdinhvzxde.supabase.co/rest/v1/profiles?id=eq.{{ $json.id }}&select=full_name,student_code,department,academic_year,enrollments(courses(course_name,course_code,semester)),grades(final_grade,ai_grade,status,assignments(title,max_grade))",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "id": "946989fd-d5ff-40b8-96c0-93746bb350ec",
+      "name": "Get Student Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        944,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json || {};\nconst prof = $('Get Profile').first().json || {};\nconst pi = $('Prepare Intent').first().json || {};\nlet lines = [];\nlines.push('STUDENT PROFILE');\nlines.push('Name: ' + (p.full_name || prof.full_name || ''));\nlines.push('Student Code: ' + (p.student_code || prof.student_code || ''));\nlines.push('Department: ' + (p.department || prof.department || ''));\nlines.push('Academic Year: ' + (p.academic_year || prof.academic_year || ''));\nlines.push('');\nlines.push('REGISTERED COURSES:');\n(p.enrollments || []).forEach(function(e){ const c = e.courses || {}; lines.push('- ' + (c.course_name || '') + ' (' + (c.course_code || '') + ') ' + (c.semester || '')); });\nlines.push('');\nlines.push('GRADES:');\n(p.grades || []).forEach(function(g){ const a = g.assignments || {}; lines.push('- ' + (a.title || '') + ': final ' + (g.final_grade != null ? g.final_grade : 'N/A') + ', ai ' + (g.ai_grade != null ? g.ai_grade : 'N/A') + ', status ' + (g.status || '') + ' (max ' + (a.max_grade != null ? a.max_grade : '') + ')'); });\nreturn [{ json: {\n  knowledge: lines.join(String.fromCharCode(10)),\n  role: 'student',\n  subjectId: (prof.student_code || prof.id || '').toString(),\n  subjectName: (prof.full_name || '').toString(),\n  question: (pi.text || '').toString()\n} }];\n"
+      },
+      "id": "bc679a22-b3d5-4c16-8b67-af13356d6fa1",
+      "name": "Build Knowledge (Student)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are the official assistant for this university course. The user has already been authenticated.\n\nRole: {{ $json.role }}\nAuthenticated ID: {{ $json.subjectId }}\nAuthenticated Name: {{ $json.subjectName }}\n\nAnswer the user's question using ONLY the COURSE DATABASE below. Do not use outside knowledge. Do not guess.\n\nSECURITY RULES (enforce strictly):\n- If Role is \"student\": ONLY reveal information about the authenticated user. NEVER reveal any other student's data. If they ask about another student, reply exactly: You are only allowed to access your own data.\n- If Role is \"professor\": ONLY reveal information about courses taught by \"{{ $json.subjectName }}\" and the students enrolled in those courses.\n- If the answer is not clearly contained in the database, reply with EXACTLY this sentence and nothing else: This information is not available in the course syllabus.\n\nCOURSE DATABASE:\n\"\"\"\n{{ $json.knowledge }}\n\"\"\"\n\nQUESTION:\n\"{{ $json.question }}\"",
+        "batching": {}
+      },
+      "id": "df3da1b5-d9fd-4ffb-a450-d5dc8f6c99a2",
+      "name": "Answer Question1",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1392,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {
+          "maxOutputTokens": 1024,
+          "temperature": 0,
+          "topP": 0.8
+        }
+      },
+      "id": "8d944432-69e5-4f54-b368-eb00aa5268d8",
+      "name": "Gemini (Q&A)1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1472,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "text",
+        "options": {
+          "fileName": "my_data.txt"
+        }
+      },
+      "id": "36af190a-941e-4c4f-b69f-14f4f4a0c9ca",
+      "name": "Answer To File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1744,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "text": "=📄 بياناتك:\n\n{{ $(\"Answer Question1\").item.json.text }}",
+        "additionalFields": {}
+      },
+      "id": "6cb8d89c-954e-4cb8-85f1-1eee70802815",
+      "name": "Send Data File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1968,
+        160
+      ],
+      "retryOnFail": true,
+      "webhookId": "49546828-7c55-4465-890e-0b0595921ddc"
+    },
+    {
+      "parameters": {
+        "url": "=https://yzhwaenvwmjdinhvzxde.supabase.co/rest/v1/profiles?id=eq.{{ $json.id }}&select=full_name,courses(course_name,course_code,assignments(title,grades(final_grade,student_id)))",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "id": "2c59c328-e185-4d68-bd4c-27acf5b5b751",
+      "name": "Get Professor Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        944,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json || {};\nconst prof = $('Get Profile').first().json || {};\nconst pi = $('Prepare Intent').first().json || {};\nlet lines = [];\nlines.push('PROFESSOR PROFILE');\nlines.push('Name: ' + (p.full_name || prof.full_name || ''));\nlines.push('');\nlines.push('COURSES TAUGHT:');\n(p.courses || []).forEach(function(c){\n  lines.push('Course: ' + (c.course_name || '') + ' (' + (c.course_code || '') + ')');\n  (c.assignments || []).forEach(function(a){\n    lines.push('  Assignment: ' + (a.title || ''));\n    (a.grades || []).forEach(function(g){ lines.push('    Student ' + (g.student_id || '') + ': ' + (g.final_grade != null ? g.final_grade : 'N/A')); });\n  });\n});\nreturn [{ json: {\n  knowledge: lines.join(String.fromCharCode(10)),\n  role: 'professor',\n  subjectId: (prof.id || '').toString(),\n  subjectName: (prof.full_name || '').toString(),\n  question: (pi.text || '').toString()\n} }];\n"
+      },
+      "id": "16b80f62-f1ea-46ee-bb6a-12dd292f5b1d",
+      "name": "Build Knowledge (Professor)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "text": "❌ Invalid credentials. Please try again.",
+        "additionalFields": {}
+      },
+      "id": "8d48e75b-bfae-4d23-937e-ec8021e9cd74",
+      "name": "Reject Auth",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        352
+      ],
+      "webhookId": "2e05d6b7-dc5d-4892-9041-b7ebb49ddebc"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "mime",
+              "leftValue": "={{ $json.message.document.mime_type }}",
+              "rightValue": "application/pdf",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "size",
+              "leftValue": "={{ $json.message.document.file_size }}",
+              "rightValue": 20971520,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bc4ea86c-dbf5-4a29-9586-f524a78a5edc",
+      "name": "Valid PDF?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        48,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = ($input.first().json.message) || {};\nconst caption = (msg.caption || '').trim();\nconst lines = caption.split('\\n').map(function (l) { return l.trim(); }).filter(Boolean);\nconst idMatch = caption.match(/\\b\\d{6,10}\\b/);\nconst studentName = lines[0] || '';\nconst assignmentLine = lines.filter(function (l) { return /assignment/i.test(l); })[0];\nconst doc = msg.document || {};\nreturn [{ json: {\n  studentName: studentName,\n  studentNameSlug: (studentName.replace(/\\s+/g, '_') || 'Student'),\n  studentId: idMatch ? idMatch[0] : '',\n  assignment: assignmentLine || 'Assignment 1',\n  assignmentSlug: (assignmentLine || 'Assignment 1').replace(/\\s+/g, ''),\n  chatId: (msg.chat || {}).id,\n  username: (msg.chat || {}).username || '',\n  fileId: doc.file_id || '',\n  originalFileName: doc.file_name || ''\n} }];\n"
+      },
+      "id": "29b14c7d-1f81-4026-994f-6de8340055c8",
+      "name": "Extract Student Info1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "profiles",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "student_code",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Extract Student Info1\").item.json.studentId }}"
+            },
+            {
+              "keyName": "role",
+              "condition": "eq",
+              "keyValue": "student"
+            }
+          ]
+        }
+      },
+      "id": "96007bd0-4a60-4171-8b64-7fbee3499642",
+      "name": "Lookup Student1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        496,
+        736
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "found",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "match",
+              "leftValue": "={{ $json.student_code }}",
+              "rightValue": "={{ $(\"Extract Student Info1\").item.json.studentId }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b62b2845-0272-42a8-a387-04293a822853",
+      "name": "Student Valid?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        720,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "assignments",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "title",
+              "condition": "ilike",
+              "keyValue": "={{ $(\"Extract Student Info1\").item.json.assignment }}"
+            }
+          ]
+        }
+      },
+      "id": "ed9fc46d-2bfe-40a6-9848-cd4a0f22ca3c",
+      "name": "Resolve Assignment",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        784
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "grades",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "student_id",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Lookup Student1\").item.json.id }}"
+            },
+            {
+              "keyName": "assignment_id",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Resolve Assignment\").item.json.id }}"
+            }
+          ]
+        }
+      },
+      "id": "7f5a397e-ae59-4121-92af-ffc465be8100",
+      "name": "Check Duplicate1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        784
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "dup",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "258f846c-ab12-402e-9762-12ac2c17f6cf",
+      "name": "Is Duplicate?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1600,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "text": "⚠️ You already submitted this assignment.",
+        "additionalFields": {}
+      },
+      "id": "4ed68ee2-0631-4347-a4d5-ea1cfadad54a",
+      "name": "Reject Duplicate1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1776,
+        736
+      ],
+      "webhookId": "c3bab6ea-1077-4096-8be4-2f5ca584673b"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $(\"Extract Student Info1\").item.json.fileId }}",
+        "additionalFields": {}
+      },
+      "id": "f9f0e739-0b71-432a-8f9b-17f98c5e1332",
+      "name": "Download PDF1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        944
+      ],
+      "retryOnFail": true,
+      "webhookId": "7e5abc32-2bd1-4ae9-a629-e003eedb2ea2"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {
+          "joinPages": true,
+          "keepSource": "both"
+        }
+      },
+      "id": "957ee1e8-a731-4865-a6e2-fd7ea36d1403",
+      "name": "Extract PDF Text1",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        2096,
+        832
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "text",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3787cc15-2de7-40cc-bf02-62298ae48126",
+      "name": "Has Readable Text?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2288,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://yzhwaenvwmjdinhvzxde.supabase.co/storage/v1/object/Fares/{{ $(\"Extract Student Info1\").item.json.studentId }}_{{ $(\"Extract Student Info1\").item.json.assignmentSlug }}.pdf",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/pdf"
+            },
+            {
+              "name": "x-upsert",
+              "value": "true"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {}
+      },
+      "id": "2d9a12a9-b315-452d-a905-a2c09845514a",
+      "name": "Upload to Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2528,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a strict, fair university teaching assistant grading a student assignment.\nGrade using this rubric (max points in brackets). The subscores MUST sum to \"score\" (0-100):\n- Content [30]\n- Grammar [20]\n- Research [20]\n- References [15]\n- Formatting [8]\n- Critical Thinking [4]\n- Originality [3]\n\nReturn ONLY valid minified JSON, no markdown, in EXACTLY this shape:\n{\"score\":0,\"content\":0,\"grammar\":0,\"research\":0,\"references\":0,\"formatting\":0,\"criticalThinking\":0,\"originality\":0,\"strengths\":\"\",\"weaknesses\":\"\",\"suggestions\":\"\",\"feedback\":\"\"}\n\nRules: subscores must sum to \"score\". Be specific and constructive. Do not include any text outside the JSON.\n\nASSIGNMENT TEXT:\n\"\"\"\n{{ $(\"Extract PDF Text1\").item.json.text }}\n\"\"\"",
+        "batching": {}
+      },
+      "id": "e9a4d666-a94c-4ce1-929c-d7a0c3493f2c",
+      "name": "Gemini Evaluation1",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2736,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-1.5-flash",
+        "options": {
+          "maxOutputTokens": 1024,
+          "temperature": 0.2,
+          "topP": 0.8
+        }
+      },
+      "id": "0b17f367-4b83-4db5-967f-9c2b6046b13b",
+      "name": "Gemini (Evaluation)1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        2784,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "let raw = ($input.first().json.text || $input.first().json.response || '').toString();\nraw = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\nlet data;\ntry {\n  data = JSON.parse(raw);\n} catch (e) {\n  throw new Error('Gemini returned non-JSON output: ' + raw.slice(0, 300));\n}\nfunction join(v) { return Array.isArray(v) ? v.join('; ') : (v || ''); }\nconst score = (data.score === undefined || data.score === null) ? '' : data.score;\nreturn [{ json: {\n  score: score,\n  content: data.content, grammar: data.grammar, research: data.research,\n  references: data.references, formatting: data.formatting,\n  criticalThinking: data.criticalThinking, originality: data.originality,\n  strengths: join(data.strengths),\n  weaknesses: join(data.weaknesses),\n  suggestions: join(data.suggestions),\n  feedback: data.feedback || '',\n  status: (score !== '' ? 'Graded' : 'Pending Review')\n} }];\n"
+      },
+      "id": "07ff4df1-7154-4641-b099-2e9e035a3738",
+      "name": "Parse Score & Feedback1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2944,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "1404059474",
+        "text": "=🧾 AI evaluation (auto-saved as final grade).\n\nStudent: {{ $(\"Extract Student Info1\").item.json.studentName }} ({{ $(\"Extract Student Info1\").item.json.studentId }})\nAssignment: {{ $(\"Extract Student Info1\").item.json.assignment }}\nAI Score: {{ $(\"Parse Score & Feedback1\").item.json.score }}/100\nFile: https://yzhwaenvwmjdinhvzxde.supabase.co/storage/v1/object/public/Fares/{{ $(\"Extract Student Info1\").item.json.studentId }}_{{ $(\"Extract Student Info1\").item.json.assignmentSlug }}.pdf",
+        "additionalFields": {}
+      },
+      "id": "cb2093d4-9e60-45b7-b8fb-a372c5b94043",
+      "name": "Professor Approval",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3168,
+        800
+      ],
+      "webhookId": "8131fb81-f9db-479c-a141-6a21bfd86d08"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = ($input.first().json.data) || {};\nconst ai = $('Parse Score & Feedback1').item.json;\nfunction pick(o, keys){ for (var i=0;i<keys.length;i++){ var k=keys[i]; if (o[k]!==undefined && o[k]!=='') return o[k]; } return ''; }\nconst decision = (pick(d,['Decision','decision','text','Approval'])||'Approve').toString();\nconst dl = decision.toLowerCase();\nconst profRaw = pick(d,['Professor Score','professorScore','Score']);\nconst profScore = (profRaw==='' ? '' : Number(profRaw));\nlet finalScore = ai.score;\nlet approvalStatus = 'Approved';\nif (dl.indexOf('reject')!==-1 || dl.indexOf('declin')!==-1) { approvalStatus='Rejected'; finalScore=''; }\nelse if (dl.indexOf('modif')!==-1 && profScore!=='') { approvalStatus='Modified'; finalScore=profScore; }\nelse if (profScore!=='' && profScore!==ai.score) { approvalStatus='Modified'; finalScore=profScore; }\nconst aiFeedback = [\n  ai.feedback ? ('Feedback: ' + ai.feedback) : '',\n  ai.strengths ? ('Strengths: ' + ai.strengths) : '',\n  ai.weaknesses ? ('Weaknesses: ' + ai.weaknesses) : '',\n  ai.suggestions ? ('Suggestions: ' + ai.suggestions) : ''\n].filter(Boolean).join(String.fromCharCode(10));\nreturn [{ json: Object.assign({}, ai, {\n  aiScore: ai.score,\n  professorScore: profScore,\n  finalScore: finalScore,\n  ai_feedback: aiFeedback,\n  approvalStatus: approvalStatus,\n  approvalTime: new Date().toISOString()\n}) }];\n"
+      },
+      "id": "e9904b91-ffeb-4d35-bce9-5c8e2a91afb3",
+      "name": "Finalize Grade",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3376,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "grades",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "assignment_id",
+              "fieldValue": "={{ $(\"Resolve Assignment\").item.json.id }}"
+            },
+            {
+              "fieldId": "student_id",
+              "fieldValue": "={{ $(\"Lookup Student1\").item.json.id }}"
+            },
+            {
+              "fieldId": "ai_grade",
+              "fieldValue": "={{ $json.aiScore }}"
+            },
+            {
+              "fieldId": "final_grade",
+              "fieldValue": "={{ $json.finalScore }}"
+            },
+            {
+              "fieldId": "ai_feedback",
+              "fieldValue": "={{ $json.ai_feedback }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.approvalStatus }}"
+            },
+            {
+              "fieldId": "graded_by",
+              "fieldValue": "AI"
+            },
+            {
+              "fieldId": "graded_at",
+              "fieldValue": "={{ $json.approvalTime }}"
+            }
+          ]
+        }
+      },
+      "id": "07888470-9ffb-4a45-85f6-a1548c76147a",
+      "name": "Record Grade1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3584,
+        800
+      ],
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "text": "=✅ Your assignment \"{{ $(\"Extract Student Info1\").item.json.assignment }}\" was received and graded. Final score: {{ $(\"Finalize Grade\").item.json.finalScore }}/100 ({{ $(\"Finalize Grade\").item.json.approvalStatus }}).",
+        "additionalFields": {}
+      },
+      "id": "04852706-9ba3-4d6e-aec0-9e3340618335",
+      "name": "Confirm To Student1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3920,
+        704
+      ],
+      "retryOnFail": true,
+      "webhookId": "3962ac1e-d7d5-4ba1-ab9e-a37adf105660"
+    },
+    {
+      "parameters": {
+        "chatId": "1404059474",
+        "text": "=📥 Recorded grade for {{ $(\"Extract Student Info1\").item.json.studentName }} ({{ $(\"Extract Student Info1\").item.json.studentId }}) - {{ $(\"Extract Student Info1\").item.json.assignment }}: {{ $(\"Finalize Grade\").item.json.finalScore }}/100 ({{ $(\"Finalize Grade\").item.json.approvalStatus }}).",
+        "additionalFields": {}
+      },
+      "id": "c3050b6a-380c-4e58-b9a7-242ce58bd57e",
+      "name": "Notify Professor1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3920,
+        896
+      ],
+      "retryOnFail": true,
+      "webhookId": "d9390acd-2325-4af5-ba1d-7ea0d153a020"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "text": "❌ This PDF has no readable text.",
+        "additionalFields": {}
+      },
+      "id": "6ac4648a-99b3-40ab-be8e-f2be28211ec1",
+      "name": "Reject Empty PDF1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2576,
+        928
+      ],
+      "webhookId": "47180350-a9b6-48df-a152-5649bf4a4e73"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "text": "❌ Could not read this PDF.",
+        "additionalFields": {}
+      },
+      "id": "6029eb1f-e9c9-41f6-a520-d92d88d902e3",
+      "name": "Reject Bad PDF1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2320,
+        944
+      ],
+      "webhookId": "925ac1ed-9d0d-4a68-85c0-08b7c91dc569"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "text": "❌ Student not found. Check your student code in the caption.",
+        "additionalFields": {}
+      },
+      "id": "d2c858d6-9faf-479f-a513-f63b64616a5b",
+      "name": "Reject Unknown Student1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        944,
+        848
+      ],
+      "webhookId": "905afded-e992-4c9e-b508-d61724a89305"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "text": "❌ Please send a valid PDF (max 20MB).",
+        "additionalFields": {}
+      },
+      "id": "b53207bb-4a17-45fa-8740-7eec53166425",
+      "name": "Reject Invalid PDF1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        928
+      ],
+      "webhookId": "5bd300fa-f84d-4d71-a60a-49b2759396d1"
+    },
+    {
+      "parameters": {
+        "chatId": "1404059474",
+        "text": "=🆘 A student reported a problem: \"{{ $(\"Prepare Intent\").item.json.text }}\" (chat {{ $(\"On Telegram Message1\").item.json.message.chat.id }}).",
+        "additionalFields": {}
+      },
+      "id": "50cfdbcd-94f0-4b08-b936-2a2975a94d51",
+      "name": "Notify Problem Professor",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4144,
+        752
+      ],
+      "webhookId": "2cc3d8a4-f16b-44ab-a63f-37e0bee8f00d"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "text": "✅ Your message was forwarded to the professor. You will be contacted soon.",
+        "additionalFields": {}
+      },
+      "id": "b970eaab-4ad3-4673-b8f0-60f981eaff1e",
+      "name": "Ack Problem Student",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4320,
+        848
+      ],
+      "webhookId": "5cafe475-e791-42a8-8cf5-2a89f528a0cf"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"On Telegram Message1\").item.json.message.chat.id }}",
+        "text": "ℹ️ Please send a question, a PDF assignment, or describe your problem.",
+        "additionalFields": {}
+      },
+      "id": "c1d01494-582f-45e7-8af7-adf87fc9b654",
+      "name": "Ask For Valid Input1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4144,
+        944
+      ],
+      "webhookId": "6a51409f-2a2c-45c6-85b8-455889bda008"
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = $('On Telegram Message1').first().json;\nconst m = t.message || {};\nreturn [{ json: {\n  text: (m.text || '').toString(),\n  caption: (m.caption || '').toString(),\n  documentMime: ((m.document || {}).mime_type || '').toString(),\n  chat: m.chat || {}\n} }];\n"
+      },
+      "id": "0d1a0813-ab21-45f6-9454-83331fab7e13",
+      "name": "Build Normalized Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -976,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# User Input & Message Processing\n\nReceives user messages from Telegram, processes both text and voice inputs, converts speech to text, and prepares the request for AI analysis.",
+        "height": 448,
+        "width": 1104,
+        "color": "#63F2E2"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1904,
+        656
+      ],
+      "typeVersion": 1,
+      "id": "da882287-04f5-478e-8023-281f0dd191b2",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# AI Intent Classification & Routing\n\nAnalyzes the user's request using Gemini AI, identifies the intent, and routes it to the appropriate workflow automatically.",
+        "height": 448,
+        "width": 784,
+        "color": "#8DAFB0"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -768,
+        656
+      ],
+      "typeVersion": 1,
+      "id": "d6c5919a-dbb4-40bb-9812-5abfe2bef53b",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Authentication & Role Validation\n\nAuthenticates users, verifies their identity, and grants access based on their role as a student or professor.",
+        "height": 512,
+        "width": 912,
+        "color": "#EE96B0"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -48,
+        -16
+      ],
+      "typeVersion": 1,
+      "id": "cb07d05b-7364-4b9a-86a7-28df6fafb1db",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Assignment Validation Pipeline\n\nValidates uploaded assignments, extracts student information, verifies enrollment, and checks file integrity before evaluation.",
+        "height": 512,
+        "width": 1296,
+        "color": "#7EEDC8"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        896,
+        -16
+      ],
+      "typeVersion": 1,
+      "id": "b2eac721-c1d1-4c9f-ab1d-a162729d8758",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "##  Assignment Validation Pipeline\n\nValidates uploaded assignments, extracts student information, verifies enrollment, and checks file integrity before evaluation.",
+        "height": 448,
+        "width": 1056,
+        "color": "#B27CF4"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        48,
+        656
+      ],
+      "typeVersion": 1,
+      "id": "8909a29e-1b5c-4578-a8bc-f6bff39ba31c",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "### Duplicate Assignment Detection\n\nDetects duplicate submissions to prevent multiple uploads of the same assignment and maintain submission integrity.",
+        "height": 448,
+        "width": 816,
+        "color": "#EBDBF5"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1152,
+        656
+      ],
+      "typeVersion": 1,
+      "id": "bf957bfb-cb09-4c11-be39-e66846baecb9",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## AI Assignment Evaluation\n\n** Extracts assignment content, evaluates it using Gemini AI, and generates detailed scores and personalized feedback.",
+        "height": 448,
+        "width": 1072,
+        "color": "#52E5E3"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2000,
+        656
+      ],
+      "typeVersion": 1,
+      "id": "847d0d23-d08d-4747-839e-45e0e81691c6",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## # Professor Review & Grade Approval\n\nAllows professors to review AI-generated evaluations, approve or edit grades, and finalize the assessment.",
+        "height": 448,
+        "width": 688,
+        "color": "#8C6392"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3104,
+        656
+      ],
+      "typeVersion": 1,
+      "id": "1e71b00c-1cb4-4532-a667-453bc6247e8e",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "## Automated Notification System\n\nAutomatically sends confirmations, grading results, validation errors, and workflow updates to students and professors.",
+        "height": 464,
+        "width": 640,
+        "color": "#B8B7AD"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3840,
+        640
+      ],
+      "typeVersion": 1,
+      "id": "99f03010-5490-4712-92a2-1872e77bbeac",
+      "name": "Sticky Note8"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On Telegram Message1": {
+      "main": [
+        [
+          {
+            "node": "Is Voice?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Voice?": {
+      "main": [
+        [
+          {
+            "node": "Download Voice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Normalized Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Voice": {
+      "main": [
+        [
+          {
+            "node": "Transcribe Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe Voice": {
+      "main": [
+        [
+          {
+            "node": "Build Voice Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Voice Message": {
+      "main": [
+        [
+          {
+            "node": "Classify Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Intent": {
+      "main": [
+        [
+          {
+            "node": "Prepare Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini (Classifier)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Intent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Intent": {
+      "main": [
+        [
+          {
+            "node": "Route Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Intent": {
+      "main": [
+        [
+          {
+            "node": "Auth Form",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Valid PDF?1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Problem Professor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask For Valid Input1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Form": {
+      "main": [
+        [
+          {
+            "node": "Get Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Profile": {
+      "main": [
+        [
+          {
+            "node": "Profile Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Profile Found?": {
+      "main": [
+        [
+          {
+            "node": "Is Student Role?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Student Role?": {
+      "main": [
+        [
+          {
+            "node": "Get Student Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Professor Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Student Data": {
+      "main": [
+        [
+          {
+            "node": "Build Knowledge (Student)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Knowledge (Student)": {
+      "main": [
+        [
+          {
+            "node": "Answer Question1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Question1": {
+      "main": [
+        [
+          {
+            "node": "Answer To File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini (Q&A)1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Answer Question1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer To File": {
+      "main": [
+        [
+          {
+            "node": "Send Data File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Professor Data": {
+      "main": [
+        [
+          {
+            "node": "Build Knowledge (Professor)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Knowledge (Professor)": {
+      "main": [
+        [
+          {
+            "node": "Answer Question1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid PDF?1": {
+      "main": [
+        [
+          {
+            "node": "Extract Student Info1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Invalid PDF1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Student Info1": {
+      "main": [
+        [
+          {
+            "node": "Lookup Student1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Student1": {
+      "main": [
+        [
+          {
+            "node": "Student Valid?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Student Valid?1": {
+      "main": [
+        [
+          {
+            "node": "Resolve Assignment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Unknown Student1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Assignment": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate1": {
+      "main": [
+        [
+          {
+            "node": "Is Duplicate?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate?1": {
+      "main": [
+        [
+          {
+            "node": "Reject Duplicate1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download PDF1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download PDF1": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF Text1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Text1": {
+      "main": [
+        [
+          {
+            "node": "Has Readable Text?1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Bad PDF1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Readable Text?1": {
+      "main": [
+        [
+          {
+            "node": "Upload to Storage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Empty PDF1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Storage": {
+      "main": [
+        [
+          {
+            "node": "Gemini Evaluation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Evaluation1": {
+      "main": [
+        [
+          {
+            "node": "Parse Score & Feedback1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini (Evaluation)1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Gemini Evaluation1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Score & Feedback1": {
+      "main": [
+        [
+          {
+            "node": "Professor Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Professor Approval": {
+      "main": [
+        [
+          {
+            "node": "Finalize Grade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Grade": {
+      "main": [
+        [
+          {
+            "node": "Record Grade1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Grade1": {
+      "main": [
+        [
+          {
+            "node": "Confirm To Student1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Professor1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Problem Professor": {
+      "main": [
+        [
+          {
+            "node": "Ack Problem Student",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Normalized Text": {
+      "main": [
+        [
+          {
+            "node": "Classify Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "e4662662-1e8c-4089-9b59-85c0b460f4f1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c7db90747265b5721e686021fd3e809acadfc23472c6e1a7a4803f4e837715b3"
+  },
+  "nodeGroups": [],
+  "id": "s0sbCHLwtGSuXyxA",
+  "tags": []
+}
