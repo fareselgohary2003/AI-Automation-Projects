@@ -1,0 +1,672 @@
+{
+  "name": "Enterprise-AI-Customer-Support",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Submit a Project Request",
+        "formDescription": "Tell us about your project. Our AI team will process your request and email you a confirmation with your Project ID.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Your Name",
+              "fieldName": "full_name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email Address",
+              "fieldType": "email",
+              "fieldName": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Company",
+              "fieldName": "company"
+            },
+            {
+              "fieldLabel": "Project Title",
+              "fieldName": "project_title",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Describe your project",
+              "fieldType": "textarea",
+              "fieldName": "project_description",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "buttonLabel": "Submit Request",
+          "path": "project-intake"
+        }
+      },
+      "id": "f0341af7-eff1-494b-bec3-752c59b7c635",
+      "name": "Project Intake Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        112
+      ],
+      "webhookId": "021b4911-3a42-4738-9ebb-e0b01d49f825"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=A new project request was submitted.\n\nName: {{ $json.full_name }}\nCompany: {{ $json.company }}\nEmail: {{ $json.email }}\nProject Title: {{ $json.project_title }}\nDescription: {{ $json.project_description }}\n\nAnalyze the request and return the structured fields.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the Reception Agent of an AI-run software company. Your job is to receive incoming project requests, detect the language, write a concise professional summary, classify the request into a category, and estimate its priority. Always respond using the required structured output schema."
+        }
+      },
+      "id": "08dd6fd9-dca3-4bc2-bd4c-6d67a9892417",
+      "name": "Reception Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "maxTokens": 2048,
+          "temperature": 0.3
+        }
+      },
+      "id": "a98032ba-47df-4f26-8f40-3c49c21fb0ff",
+      "name": "OpenRouter Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        160,
+        336
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "VBG6jf99e1Sml5vn",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"language\":{\"type\":\"string\",\"description\":\"ISO language of the request, e.g. en, ar, fr\"},\"summary\":{\"type\":\"string\",\"description\":\"One-paragraph summary of the request\"},\"category\":{\"type\":\"string\",\"description\":\"One of: web, mobile, ai, automation, data, design, consulting, other\"},\"priority\":{\"type\":\"string\",\"description\":\"One of: low, medium, high, urgent\"}},\"required\":[\"language\",\"summary\",\"category\",\"priority\"]}"
+      },
+      "id": "af6348bc-11d8-4684-9234-9ed12aee413a",
+      "name": "Reception Output Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        368,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst form = $('Project Intake Form').item.json;\nconst rec = $('Reception Agent').item.json.output || {};\n\nconst now = new Date();\nconst stamp = now.getTime().toString(36).toUpperCase();\nconst rand = Math.floor(Math.random() * 9000 + 1000);\n\nconst projectId = 'PRJ-' + stamp + '-' + rand;\nconst clientId = 'CLI-' + (form.email || 'unknown').split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8) + '-' + rand;\n\nreturn [{\n  json: {\n    project_id: projectId,\n    client_id: clientId,\n    full_name: form.full_name || '',\n    email: form.email || '',\n    company: form.company || '',\n    project_title: form.project_title || '',\n    project_description: form.project_description || '',\n    language: rec.language || 'en',\n    summary: rec.summary || form.project_description || '',\n    category: rec.category || 'other',\n    priority: rec.priority || 'medium',\n    created_at: now.toISOString(),\n  },\n}];\n"
+      },
+      "id": "87eba2b1-39d7-4136-8d53-e4b905a28ab2",
+      "name": "Prepare Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "NRSp7jVaQrRs6FMD",
+          "cachedResultName": "Clients"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $json.client_id }}",
+            "full_name": "={{ $json.full_name }}",
+            "email": "={{ $json.email }}",
+            "company": "={{ $json.company }}",
+            "language": "={{ $json.language }}",
+            "first_seen": "={{ $json.created_at }}",
+            "notes": "={{ $json.category }} project request"
+          },
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "full_name",
+              "displayName": "full_name",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "language",
+              "displayName": "language",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_seen",
+              "displayName": "first_seen",
+              "required": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7ab9902d-ce34-44b1-9631-6ecab99a56ef",
+      "name": "Save Client",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Break the following project into a concise roadmap and a list of concrete, assignable tasks.\n\nProject Title: {{ $json.project_title }}\nCategory: {{ $json.category }}\nPriority: {{ $json.priority }}\nSummary: {{ $json.summary }}\n\nGenerate 3-7 tasks. Assign each to the most appropriate department and estimate its duration in days.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the Project Manager Agent of an AI-run software company. You break projects into milestones and concrete tasks, assign each task to the right department, and estimate durations. Always respond using the required structured output schema."
+        }
+      },
+      "id": "4ed42b95-5c7c-4924-a68a-fbc1a41cc114",
+      "name": "Project Manager Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1024,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "maxTokens": 2048,
+          "temperature": 0.4
+        }
+      },
+      "id": "deeaf619-ae82-4ff7-b6fd-74071bd64bac",
+      "name": "OpenRouter Chat Model (PM)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        336
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "id": "VBG6jf99e1Sml5vn",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"roadmap\":{\"type\":\"string\",\"description\":\"A short project roadmap describing the milestones\"},\"tasks\":{\"type\":\"array\",\"description\":\"Concrete tasks to execute this project\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"description\":{\"type\":\"string\"},\"department\":{\"type\":\"string\",\"description\":\"One of: business_analysis, research, architecture, backend, frontend, qa, documentation, finance\"},\"priority\":{\"type\":\"string\",\"description\":\"low, medium, high, or urgent\"},\"estimated_days\":{\"type\":\"number\"}},\"required\":[\"title\",\"description\",\"department\",\"priority\",\"estimated_days\"]}}},\"required\":[\"roadmap\",\"tasks\"]}"
+      },
+      "id": "832685f6-daca-42ef-8a8e-17999bc1a16d",
+      "name": "Project Manager Output Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1168,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "m9Fh8wzcmPtQEOgv",
+          "cachedResultName": "Projects"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "project_id": "={{ $('Prepare Records').item.json.project_id }}",
+            "client_id": "={{ $('Prepare Records').item.json.client_id }}",
+            "client_email": "={{ $('Prepare Records').item.json.email }}",
+            "title": "={{ $('Prepare Records').item.json.project_title }}",
+            "summary": "={{ $('Prepare Records').item.json.summary }}",
+            "category": "={{ $('Prepare Records').item.json.category }}",
+            "priority": "={{ $('Prepare Records').item.json.priority }}",
+            "status": "planning",
+            "roadmap": "={{ $json.output.roadmap }}",
+            "created_date": "={{ $('Prepare Records').item.json.created_at }}"
+          },
+          "schema": [
+            {
+              "id": "project_id",
+              "displayName": "project_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "client_email",
+              "displayName": "client_email",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "roadmap",
+              "displayName": "roadmap",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_date",
+              "displayName": "created_date",
+              "required": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "82afe72a-69c9-4878-8306-e952b3d3db30",
+      "name": "Save Project",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1376,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst pm = $('Project Manager Agent').item.json.output || {};\nconst prep = $('Prepare Records').item.json;\nconst tasks = Array.isArray(pm.tasks) ? pm.tasks : [];\n\nconst now = new Date();\nconst out = [];\nfor (let i = 0; i < tasks.length; i++) {\n  const t = tasks[i] || {};\n  out.push({\n    json: {\n      task_id: prep.project_id + '-T' + (i + 1),\n      project_id: prep.project_id,\n      title: t.title || ('Task ' + (i + 1)),\n      description: t.description || '',\n      department: t.department || 'business_analysis',\n      status: 'todo',\n      priority: t.priority || prep.priority || 'medium',\n      estimated_days: typeof t.estimated_days === 'number' ? t.estimated_days : 1,\n      created_date: now.toISOString(),\n    },\n  });\n}\nreturn out.length ? out : [{ json: {\n  task_id: prep.project_id + '-T1',\n  project_id: prep.project_id,\n  title: 'Review project request',\n  description: prep.summary,\n  department: 'business_analysis',\n  status: 'todo',\n  priority: prep.priority || 'medium',\n  estimated_days: 1,\n  created_date: now.toISOString(),\n} }];\n"
+      },
+      "id": "7418a255-a115-48b7-8253-968d6853f386",
+      "name": "Split Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "tvUArHp4rNxn6N0o",
+          "cachedResultName": "Tasks"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "task_id": "={{ $json.task_id }}",
+            "project_id": "={{ $json.project_id }}",
+            "title": "={{ $json.title }}",
+            "description": "={{ $json.description }}",
+            "department": "={{ $json.department }}",
+            "status": "={{ $json.status }}",
+            "priority": "={{ $json.priority }}",
+            "estimated_days": "={{ $json.estimated_days }}",
+            "created_date": "={{ $json.created_date }}"
+          },
+          "schema": [
+            {
+              "id": "task_id",
+              "displayName": "task_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "project_id",
+              "displayName": "project_id",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "department",
+              "displayName": "department",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "estimated_days",
+              "displayName": "estimated_days",
+              "required": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_date",
+              "displayName": "created_date",
+              "required": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6ea93684-e03f-4534-812a-f8dc91b65124",
+      "name": "Save Tasks",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1824,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Prepare Records').item.json.email }}",
+        "subject": "=Project Received — {{ $('Prepare Records').item.json.project_id }}",
+        "message": "=<h2>Thank you, {{ $('Prepare Records').item.json.full_name }}!</h2><p>We have received your project request and our AI team has started planning it.</p><p><b>Project ID:</b> {{ $('Prepare Records').item.json.project_id }}<br><b>Title:</b> {{ $('Prepare Records').item.json.project_title }}<br><b>Category:</b> {{ $('Prepare Records').item.json.category }}<br><b>Priority:</b> {{ $('Prepare Records').item.json.priority }}</p><p><b>Summary:</b> {{ $('Prepare Records').item.json.summary }}</p><p><b>Roadmap:</b><br>{{ $('Project Manager Agent').item.json.output.roadmap }}</p><p>We will keep you updated as work progresses.</p>",
+        "options": {}
+      },
+      "id": "f362fa0c-a108-4e66-8fcc-56d52f7261c1",
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2048,
+        112
+      ],
+      "executeOnce": true,
+      "webhookId": "1ce5fecc-e34a-481d-9fd9-73e12ee2bb07",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ikAxXiVXXG5Iq9rO",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Project Intake Form": {
+      "main": [
+        [
+          {
+            "node": "Reception Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reception Agent": {
+      "main": [
+        [
+          {
+            "node": "Prepare Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Reception Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reception Output Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Reception Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Records": {
+      "main": [
+        [
+          {
+            "node": "Save Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Client": {
+      "main": [
+        [
+          {
+            "node": "Project Manager Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Project Manager Agent": {
+      "main": [
+        [
+          {
+            "node": "Save Project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model (PM)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Project Manager Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Project Manager Output Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Project Manager Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Project": {
+      "main": [
+        [
+          {
+            "node": "Split Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Tasks": {
+      "main": [
+        [
+          {
+            "node": "Save Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Tasks": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "757b8c8a-c7bd-4677-a815-9adea1fd9871",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f946a8acc9812ca126b58ea643448214a15081d204b389d09e628d180a193f74"
+  },
+  "nodeGroups": [],
+  "id": "YMyY7Urv2lSlSCQ1",
+  "tags": []
+}
