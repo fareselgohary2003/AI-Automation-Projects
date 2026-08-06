@@ -1,0 +1,673 @@
+{
+  "name": "Hospital Appointment Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Book an Appointment",
+        "formDescription": "Please select the department you would like to visit.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Department",
+              "fieldType": "dropdown",
+              "fieldName": "department",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Cardiology"
+                  },
+                  {
+                    "option": "Orthopedics"
+                  },
+                  {
+                    "option": "Neurology"
+                  },
+                  {
+                    "option": "Pediatrics"
+                  },
+                  {
+                    "option": "Internal Medicine"
+                  },
+                  {
+                    "option": "Dermatology"
+                  },
+                  {
+                    "option": "ENT"
+                  },
+                  {
+                    "option": "Ophthalmology"
+                  },
+                  {
+                    "option": "Dentistry"
+                  },
+                  {
+                    "option": "General Surgery"
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {
+          "buttonLabel": "Next",
+          "path": "hospital-appointment"
+        }
+      },
+      "id": "e8656bdb-ecde-46da-b05f-1cda59f42735",
+      "name": "Choose Department",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -96,
+        0
+      ],
+      "webhookId": "47cd5f13-adb2-4ad0-9d53-fb4edf91a279"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "euwn1aucbEK9GbEq",
+          "cachedResultName": "hospital_doctors"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "department",
+              "keyValue": "={{ $json.department }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "221ab0e2-9352-4a43-8d06-76f65ab5c2cf",
+      "name": "Get Doctors",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        128,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\nlet html = '<div style=\"text-align:left\"><h3>Available Doctors</h3>';\nfor (const r of rows) {\n  html += '<p><b>' + r.doctor_name + '</b><br/>' + r.specialty + '<br/>\\u2B50 ' + r.rating + '/5 (' + r.review_count + ' reviews)</p>';\n}\nhtml += '</div>';\nconst values = rows.map(r => ({ option: r.doctor_name }));\nconst fields = [\n  { fieldType: 'html', html: html },\n  { fieldLabel: 'Choose your doctor', fieldName: 'doctor_name', fieldType: 'dropdown', fieldOptions: { values: values }, requiredField: true },\n];\nreturn [{ json: { formFieldsJson: JSON.stringify(fields) } }];"
+      },
+      "id": "7ffb5879-52ea-4278-92d5-469e3751d23d",
+      "name": "Build Doctors Form",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        352,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "defineForm": "json",
+        "jsonOutput": "={{ $json.formFieldsJson }}",
+        "options": {
+          "formTitle": "Choose your Doctor",
+          "buttonLabel": "Next"
+        }
+      },
+      "id": "ec01c279-974a-402e-a073-76e61856b107",
+      "name": "Choose Doctor",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        576,
+        0
+      ],
+      "webhookId": "f889eb4b-62d5-4a23-9cc1-4c3d4c84f7e7"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "0WuA4KU1jXOhY0WF",
+          "cachedResultName": "hospital_slots"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "doctor_name",
+              "keyValue": "={{ $json.doctor_name }}"
+            },
+            {
+              "keyName": "is_available",
+              "condition": "isTrue"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "fdc5b0db-84f7-4ec9-88a6-33fc2f0e8619",
+      "name": "Get Slots",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\nconst values = rows.map(r => ({ option: r.day_name + ' - ' + r.slot_time }));\nconst fields = [\n  { fieldLabel: 'Choose your appointment', fieldName: 'appointment_slot', fieldType: 'dropdown', fieldOptions: { values: values }, requiredField: true },\n];\nreturn [{ json: { formFieldsJson: JSON.stringify(fields) } }];"
+      },
+      "id": "2c617e81-fbb9-45fe-adc4-1c380bd17705",
+      "name": "Build Slots Form",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "defineForm": "json",
+        "jsonOutput": "={{ $json.formFieldsJson }}",
+        "options": {
+          "formTitle": "Choose your Appointment",
+          "buttonLabel": "Next"
+        }
+      },
+      "id": "ab87d421-f4ac-445d-9d3f-a0414e9aed63",
+      "name": "Choose Slot",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        1232,
+        0
+      ],
+      "webhookId": "48ca38ed-8f68-4afa-ab39-fab8f49ab6b1"
+    },
+    {
+      "parameters": {
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Full Name",
+              "fieldName": "patient_name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Phone Number",
+              "fieldName": "phone",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email Address",
+              "fieldType": "email",
+              "fieldName": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Age",
+              "fieldType": "number",
+              "fieldName": "age",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Gender",
+              "fieldType": "dropdown",
+              "fieldName": "gender",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Male"
+                  },
+                  {
+                    "option": "Female"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Notes (optional)",
+              "fieldType": "textarea",
+              "fieldName": "notes"
+            }
+          ]
+        },
+        "options": {
+          "formTitle": "Your Details",
+          "buttonLabel": "Confirm Booking"
+        }
+      },
+      "id": "f8c06435-0c84-46e7-b02b-e7664e4dc711",
+      "name": "Patient Details",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        1472,
+        0
+      ],
+      "webhookId": "08576392-b22f-4ee2-8443-650dd0b3b70f"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pull each value from the node that actually holds it\nconst patient = $('Patient Details').first().json;\nconst department = $('Choose Department').first().json.department || \"\";\nconst doctor = $('Choose Doctor').first().json.doctor_name || \"\";\n\n// The slot looks like \"Saturday - 10:00 AM\" -> split into day and time\nconst slot = $('Choose Slot').first().json.appointment_slot || \"\";\nconst slotParts = slot.split(\" - \");\nconst appointmentDate = slotParts[0] || \"\";\nconst appointmentTime = slotParts.slice(1).join(\" - \") || \"\";\n\nconst queueNumber = $input.all().length + 1;\nconst bookingId = `BK-${Date.now()}`;\nconst bookingDate = new Date().toLocaleString(\"en-GB\", {\n  day: \"2-digit\",\n  month: \"2-digit\",\n  year: \"numeric\",\n  hour: \"2-digit\",\n  minute: \"2-digit\"\n});\n\nreturn [{\n  json: {\n    \"Queue Number\": queueNumber,\n    \"Booking ID\": bookingId,\n    \"Booking Date\": bookingDate,\n\n    \"Full Name\": patient.patient_name || \"\",\n    \"Email\": patient.email || \"\",\n    \"Phone\": patient.phone || \"\",\n    \"Age\": patient.age || \"\",\n    \"Gender\": patient.gender || \"\",\n\n    \"Department\": department,\n    \"Doctor\": doctor,\n\n    \"Appointment Date\": appointmentDate,\n    \"Appointment Time\": appointmentTime,\n\n    \"Notes\": patient.notes || \"-\",\n\n    \"Status\": \"Confirmed\"\n  }\n}];"
+      },
+      "id": "886e967a-1730-4d4d-9598-fa41494a2e3c",
+      "name": "Code in JavaScript1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ISjFvCQUNdKvidiyf-6W8qqtB86jaR99TuiZW7gaeWM",
+          "mode": "list",
+          "cachedResultName": "110",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ISjFvCQUNdKvidiyf-6W8qqtB86jaR99TuiZW7gaeWM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "الورقة1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1caXDCY1kYnLe0rUr6dFsHiSVRDfLIicKcn9SRbLU1Do/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Booking ID": "={{ $json['Booking ID'] }}",
+            "Full Name": "={{ $json['Full Name'] }}",
+            "Phone": "={{ $json.Phone }}",
+            "Email": "={{ $json.Email }}",
+            "Age": "={{ $json.Age }}",
+            "Department": "={{ $json.Department }}",
+            "Gender": "={{ $json.Gender }}",
+            "Doctor": "={{ $json.Doctor }}",
+            "Appointment Date": "={{ $json['Appointment Date'] }}",
+            "Queue Number": "={{ $json['Queue Number'] }}",
+            "Booking Date": "={{ $json['Booking Date'] }}",
+            "Appointment Time": "={{ $json['Appointment Time'] }}",
+            "Notes": "={{ $json.Notes }}",
+            "Status": "={{ $json.Status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Queue Number",
+              "displayName": "Queue Number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Booking ID",
+              "displayName": "Booking ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Booking Date",
+              "displayName": "Booking Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Age",
+              "displayName": "Age",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Gender",
+              "displayName": "Gender",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Department",
+              "displayName": "Department",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Doctor",
+              "displayName": "Doctor",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Appointment Date",
+              "displayName": "Appointment Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Appointment Time",
+              "displayName": "Appointment Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "dd721d53-018c-4699-b953-4420094dac45",
+      "name": "Append row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2064,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "jqscpOAcV8f7zQ3t",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const booking = $json;\n\nconst subject = `🏥 Appointment Confirmation | ${booking[\"Department\"]}`;\n\nconst body = `\nHello ${booking[\"Full Name\"]},\n\nYour appointment has been successfully confirmed.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n📋 APPOINTMENT DETAILS\n\n🎟 Queue Number:\n${booking[\"Queue Number\"]}\n\n🆔 Booking ID:\n${booking[\"Booking ID\"]}\n\n👨‍⚕️ Doctor:\n${booking[\"Doctor\"]}\n\n🏥 Department:\n${booking[\"Department\"]}\n\n📅 Date:\n${booking[\"Appointment Date\"]}\n\n🕒 Time:\n${booking[\"Appointment Time\"]}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n👤 PATIENT INFORMATION\n\nName:\n${booking[\"Full Name\"]}\n\nPhone:\n${booking[\"Phone\"]}\n\nEmail:\n${booking[\"Email\"]}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n📌 Please arrive at least 15 minutes before your appointment.\n\nIf you need to cancel or reschedule, please contact the hospital.\n\nBooking Status:\n✅ ${booking[\"Status\"]}\n\nThank you for choosing our hospital.\n\nWe wish you a speedy recovery.\n\nBest Regards,\nHospital Management\n`;\n\nreturn [{\n  json: {\n    ...booking,\n    subject,\n    emailBody: body\n  }\n}];"
+      },
+      "id": "4c21b079-9c45-42e9-a222-1a21d9210426",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json[\"Email\"] }}",
+        "subject": "=Appointment Confirmation - {{ $json[\"Booking ID\"] }}",
+        "message": "=<h2 style=\"color:#2E86C1;\">🏥 Hospital Appointment Confirmation</h2>\n\n<p>Dear <strong>{{ $json[\"Full Name\"] }}</strong>,</p>\n\n<p>Your appointment has been successfully confirmed.</p>\n\n<hr>\n\n<h3>📋 Appointment Details</h3>\n\n<table border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse:collapse;\">\n<tr>\n<td><strong>🎟 Queue Number</strong></td>\n<td>{{ $json[\"Queue Number\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>🆔 Booking ID</strong></td>\n<td>{{ $json[\"Booking ID\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>🏥 Department</strong></td>\n<td>{{ $json[\"Department\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>👨‍⚕️ Doctor</strong></td>\n<td>{{ $json[\"Doctor\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>📅 Appointment Date</strong></td>\n<td>{{ $json[\"Appointment Date\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>🕒 Appointment Time</strong></td>\n<td>{{ $json[\"Appointment Time\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>📌 Status</strong></td>\n<td><strong style=\"color:green;\">{{ $json[\"Status\"] }}</strong></td>\n</tr>\n</table>\n\n<br>\n\n<h3>👤 Patient Information</h3>\n\n<table border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse:collapse;\">\n<tr>\n<td><strong>Full Name</strong></td>\n<td>{{ $json[\"Full Name\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>Phone</strong></td>\n<td>{{ $json[\"Phone\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>Email</strong></td>\n<td>{{ $json[\"Email\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>Age</strong></td>\n<td>{{ $json[\"Age\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>Gender</strong></td>\n<td>{{ $json[\"Gender\"] }}</td>\n</tr>\n\n<tr>\n<td><strong>Notes</strong></td>\n<td>{{ $json[\"Notes\"] }}</td>\n</tr>\n</table>\n\n<br>\n\n<p><strong>📍 Please arrive at least 15 minutes before your appointment.</strong></p>\n\n<p>If you need to cancel or reschedule your appointment, please contact the hospital in advance.</p>\n\n<hr>\n\n<p>Thank you for choosing our hospital.</p>\n\n<p>We wish you a speedy recovery. ❤️</p>\n\n<p><strong>Hospital Management Team</strong></p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "35f38b2b-5b12-4dcb-8271-a242c5240e59",
+      "name": "Send a message",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2592,
+        0
+      ],
+      "webhookId": "cd1efcb7-ce66-4481-ad13-07d2891bd4d3",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "B1ijP7UIihUbVT5S",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Appointment Confirmed ✅",
+        "completionMessage": "=🎉 Your appointment has been successfully booked!\n\n🆔 Booking ID: {{ $json[\"Booking ID\"] }}\n\n🎟 Queue Number: {{ $json[\"Queue Number\"] }}\n\n📅 Appointment Date: {{ $json[\"Appointment Date\"] }}\n\n🕒 Appointment Time: {{ $json[\"Appointment Time\"] }}\n\n👨‍⚕️ Doctor: {{ $json[\"Doctor\"] }}\n\n🏥 Department: {{ $json[\"Department\"] }}\n\n📧 A confirmation email has been sent to:\n{{ $json[\"Email\"] }}\n\nPlease arrive at least 15 minutes before your appointment.\n\nThank you for choosing our hospital! 💙",
+        "options": {}
+      },
+      "id": "ce33749d-8fb4-4b04-b5b7-b5e201a1b766",
+      "name": "Done",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        2816,
+        0
+      ],
+      "webhookId": "2b358785-439c-4930-9a06-fb2594160c01"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Choose Department": {
+      "main": [
+        [
+          {
+            "node": "Get Doctors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Doctors": {
+      "main": [
+        [
+          {
+            "node": "Build Doctors Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Doctors Form": {
+      "main": [
+        [
+          {
+            "node": "Choose Doctor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Choose Doctor": {
+      "main": [
+        [
+          {
+            "node": "Get Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Slots": {
+      "main": [
+        [
+          {
+            "node": "Build Slots Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Slots Form": {
+      "main": [
+        [
+          {
+            "node": "Choose Slot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Choose Slot": {
+      "main": [
+        [
+          {
+            "node": "Patient Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Patient Details": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "bf66f125-d374-408a-81d9-2721bbd31caf",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c7db90747265b5721e686021fd3e809acadfc23472c6e1a7a4803f4e837715b3"
+  },
+  "nodeGroups": [],
+  "id": "GUDPIWnXaMDJAdZe",
+  "tags": []
+}
