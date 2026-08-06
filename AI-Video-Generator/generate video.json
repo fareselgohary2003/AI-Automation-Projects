@@ -1,0 +1,1134 @@
+{
+  "name": "generate video",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "download": false
+        }
+      },
+      "id": "fe7f378e-3e24-450c-af0f-1999cc8b8093",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        384
+      ],
+      "webhookId": "e2dd1b02-5b00-46dc-94e4-bfa096faef9e",
+      "credentials": {
+        "telegramApi": {
+          "id": "V5XIOl3fJahvQ2le",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.first().json;\nconst msg = item.message || item.edited_message || {};\nlet chatId = msg.chat ? msg.chat.id : undefined;\nlet userId = msg.from ? msg.from.id : undefined;\nlet text = (msg.text || '').trim();\nlet command = '';\nlet photoFileId = '';\nlet hasPhoto = false;\nif (Array.isArray(msg.photo) && msg.photo.length) {\n  hasPhoto = true;\n  photoFileId = msg.photo[msg.photo.length - 1].file_id;\n}\nif (!hasPhoto && msg.document && (msg.document.mime_type || '').startsWith('image/')) {\n  hasPhoto = true;\n  photoFileId = msg.document.file_id;\n}\nif (text.startsWith('/')) {\n  command = text.split(/\\s+/)[0].toLowerCase().replace(/@.*$/, '');\n}\nreturn [{ json: {\n  chatId: chatId !== undefined ? String(chatId) : '',\n  telegramId: userId !== undefined ? String(userId) : '',\n  text, command, photoFileId, hasPhoto,\n} }];\n"
+      },
+      "id": "b6bb4ced-0b59-4a30-ade2-d702bf64baf3",
+      "name": "Parse Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "pFy2dN1rgNeUalVg",
+          "cachedResultName": "telegram_video_bot_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telegram_id",
+              "keyValue": "={{ $json.telegramId }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "3c536aeb-8268-47df-9207-edee11a8a6a0",
+      "name": "Get State",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        384
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst p = $('Parse Update').item.json;\nconst s = $input.first().json || {};\nconst state = s.state || 'idle';\nlet images = [];\ntry { images = JSON.parse(s.images_json || '[]'); } catch (e) { images = []; }\nif (!Array.isArray(images)) images = [];\n\nconst cmd = p.command;\nlet action = 'fallback';\nlet newImages = images;\nlet newState = state;\n\nif (cmd === '/start' || cmd === '/help') {\n  action = 'help';\n} else if (cmd === '/newvideo') {\n  action = 'start_new'; newState = 'awaiting_images'; newImages = [];\n} else if (state === 'awaiting_images' && p.hasPhoto) {\n  if (images.length < 20) newImages = images.concat([p.photoFileId]);\n  action = 'collect_image'; newState = 'awaiting_images';\n} else if (state === 'awaiting_images' && p.text && !p.hasPhoto && !cmd) {\n  if (images.length >= 1) { action = 'generate'; newState = 'generating'; }\n  else { action = 'fallback'; }\n}\n\nlet replyText = '';\nif (action === 'fallback') {\n  if (state === 'awaiting_images') replyText = \"You have sent \" + images.length + \" image(s). Send at least 1 photo, then send any text (e.g. done) to start generating.\";\n  else if (state === 'generating') replyText = 'A video is already being generated. Please wait for it to finish.';\n  else replyText = 'Welcome! Send /newvideo to start, then just send your images.';\n}\n\nreturn [{ json: {\n  action,\n  chatId: p.chatId,\n  telegramId: p.telegramId,\n  prompt: '',\n  imagesJson: JSON.stringify(newImages),\n  imageCount: newImages.length,\n  firstImageId: newImages[0] || '',\n  replyText,\n} }];\n"
+      },
+      "id": "b7109fb7-a67e-4fd6-af8c-8f98b521553a",
+      "name": "Decide Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "help",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "help"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "start_new",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "start_new"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "collect_image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "collect_image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "generate",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "generate"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "fallback"
+        }
+      },
+      "id": "079ee2fe-7acf-4fb2-ad83-cb7aa800b405",
+      "name": "Route Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Decide Action\").item.json.chatId }}",
+        "text": "<b>Telegram AI Video Generator</b>\n\nTurn your photos into an AI video.\n\n<b>Commands</b>\n/newvideo - start a new video\n/help - show this help\n\n<b>How it works</b>\n1. Send /newvideo\n2. Send 1-20 photos\n3. Send any text (e.g. done) to start generating\n\nYou will receive the finished MP4 here.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "896ffdbc-0217-4883-8774-61dc24bcf804",
+      "name": "Send Help",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        0
+      ],
+      "webhookId": "67dcf6bc-56ee-4bb4-9b0b-813571ef5437",
+      "credentials": {
+        "telegramApi": {
+          "id": "V5XIOl3fJahvQ2le",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "pFy2dN1rgNeUalVg",
+          "cachedResultName": "telegram_video_bot_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telegram_id",
+              "keyValue": "={{ $json.telegramId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "telegram_id"
+          ],
+          "value": {
+            "telegram_id": "={{ $json.telegramId }}",
+            "chat_id": "={{ $json.chatId }}",
+            "state": "awaiting_images",
+            "prompt": "",
+            "images_json": "[]"
+          },
+          "schema": [
+            {
+              "id": "telegram_id",
+              "displayName": "telegram_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "prompt",
+              "displayName": "prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "images_json",
+              "displayName": "images_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cabc9542-3ebd-4023-be16-c740dd01e1be",
+      "name": "Set Awaiting Images",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Decide Action\").item.json.chatId }}",
+        "text": "Send me your reference photos now (1 to 20 images of the two people).\n\nWhen you are done, send any text (e.g. <i>done</i>) to start generating the video.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "d83c94a1-974a-4401-a54f-468d2bd8a7fe",
+      "name": "Send Images Request",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        192
+      ],
+      "webhookId": "0f0af655-44c8-4c1b-b691-d3355a1c5726",
+      "credentials": {
+        "telegramApi": {
+          "id": "V5XIOl3fJahvQ2le",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "pFy2dN1rgNeUalVg",
+          "cachedResultName": "telegram_video_bot_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telegram_id",
+              "keyValue": "={{ $json.telegramId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "telegram_id"
+          ],
+          "value": {
+            "telegram_id": "={{ $json.telegramId }}",
+            "chat_id": "={{ $json.chatId }}",
+            "state": "awaiting_images",
+            "prompt": "",
+            "images_json": "={{ $json.imagesJson }}"
+          },
+          "schema": [
+            {
+              "id": "telegram_id",
+              "displayName": "telegram_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "prompt",
+              "displayName": "prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "images_json",
+              "displayName": "images_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0b6de31b-2a65-4886-9ad3-6e7d7b71f1e3",
+      "name": "Collect Image",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Decide Action\").item.json.chatId }}",
+        "text": "=Received image {{ $(\"Decide Action\").item.json.imageCount }} of up to 20. Send more, or send any text to start generating.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9dfb67b1-8399-4833-8a74-a4de37e021a6",
+      "name": "Send Image Ack",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        384
+      ],
+      "webhookId": "2148a407-eb2a-41b0-8132-d133e4196149",
+      "credentials": {
+        "telegramApi": {
+          "id": "V5XIOl3fJahvQ2le",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "pFy2dN1rgNeUalVg",
+          "cachedResultName": "telegram_video_bot_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telegram_id",
+              "keyValue": "={{ $json.telegramId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "telegram_id"
+          ],
+          "value": {
+            "telegram_id": "={{ $json.telegramId }}",
+            "chat_id": "={{ $json.chatId }}",
+            "state": "generating",
+            "prompt": "",
+            "images_json": "={{ $json.imagesJson }}"
+          },
+          "schema": [
+            {
+              "id": "telegram_id",
+              "displayName": "telegram_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "prompt",
+              "displayName": "prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "images_json",
+              "displayName": "images_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4f739cc2-8b35-41b0-9a29-368539ef6735",
+      "name": "Set Generating",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Decide Action\").item.json.chatId }}",
+        "text": "Generating your video... This can take a few minutes. I will send it here when it is ready.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "41478878-2f16-4cab-aa50-2fe1e4aa0a04",
+      "name": "Notify Generating",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        576
+      ],
+      "webhookId": "1d3c9aef-35fb-4f4d-83e2-af09aa066fd9",
+      "credentials": {
+        "telegramApi": {
+          "id": "V5XIOl3fJahvQ2le",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $(\"Decide Action\").item.json.firstImageId }}",
+        "additionalFields": {}
+      },
+      "id": "30e9d91f-b885-48f2-93f1-df8c1635f4ef",
+      "name": "Get Seed Image",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1568,
+        576
+      ],
+      "webhookId": "eda69fcd-2b04-42db-87bf-d81edb2bf0e8",
+      "credentials": {
+        "telegramApi": {
+          "id": "V5XIOl3fJahvQ2le",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst d = $('Decide Action').item.json;\nconst item = $input.first();\nconst binMeta = (item.binary && item.binary.data) || {};\nconst mime = binMeta.mimeType || 'image/jpeg';\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst b64 = buffer.toString('base64');\nconst dataUri = 'data:' + mime + ';base64,' + b64;\nconst FIXED_PROMPT = [\n\"Create a realistic 10-second cinematic video using the 5-6 uploaded reference photos of the two people. Preserve their exact facial features, hairstyle, skin tone, body proportions, and clothing style consistently throughout the video.\",\n\"\",\n\"Scene:\",\n\"The two friends are walking together on a quiet street at sunset, laughing naturally. One friend playfully bumps the other's shoulder, and the other laughs, points at him jokingly, then they both continue walking side by side. At the end of the clip, they look at the camera, smile, and do a casual fist bump.\",\n\"\",\n\"Style:\",\n\"Ultra-realistic, cinematic, natural body movement, authentic facial expressions, smooth camera motion, warm golden-hour lighting, shallow depth of field, high-quality skin details, realistic shadows, 4K, 24 fps.\",\n\"\",\n\"Camera:\",\n\"Start with a medium tracking shot from the front, slowly move closer, then finish with a close-up during the fist bump.\",\n\"\",\n\"Requirements:\",\n\"- Keep both identities identical to the reference photos.\",\n\"- No face distortion or identity changes.\",\n\"- Natural lip movement and eye contact.\",\n\"- Realistic walking animation.\",\n\"- Stable camera with no flickering.\",\n\"- Duration: exactly 10 seconds.\",\n\"- No subtitles, no text, no watermark.\"\n].join('\\n');\nconst falBody = {\n  prompt: FIXED_PROMPT,\n  image_url: dataUri,\n  duration: '10',\n  aspect_ratio: '16:9',\n};\nreturn [{ json: { falBody, chatId: d.chatId, telegramId: d.telegramId } }];\n"
+      },
+      "id": "a3120380-388d-4460-8cc5-bf4de8a88bc7",
+      "name": "Prepare Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://queue.fal.run/fal-ai/kling-video/v2/master/image-to-video",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.falBody) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "79a889b1-aad6-4d1e-8312-5baa0ae15fbe",
+      "name": "Submit Fal Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2016,
+        576
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "18BX63Uzvt3P1Hg3",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "id": "db01c5cb-83a2-4113-a9d8-0b4a27668017",
+      "name": "Wait For Render",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2240,
+        576
+      ],
+      "webhookId": "7b537f41-7093-4e1e-bf16-6c8713298a9d"
+    },
+    {
+      "parameters": {
+        "url": "={{ $(\"Submit Fal Job\").item.json.status_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "919d141e-2996-416e-b867-a7baf709a274",
+      "name": "Poll Fal Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2464,
+        512
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "18BX63Uzvt3P1Hg3",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "done",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "COMPLETED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a9d21a97-e734-49e5-8125-485745753b97",
+      "name": "Is Done",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2688,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $(\"Submit Fal Job\").item.json.response_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "0d033a7b-24e3-4e81-860a-54ae71cff6ac",
+      "name": "Get Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2912,
+        464
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "18BX63Uzvt3P1Hg3",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "pFy2dN1rgNeUalVg",
+          "cachedResultName": "telegram_video_bot_state"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telegram_id",
+              "keyValue": "={{ $(\"Decide Action\").item.json.telegramId }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "telegram_id"
+          ],
+          "value": {
+            "telegram_id": "={{ $(\"Decide Action\").item.json.telegramId }}",
+            "chat_id": "={{ $(\"Decide Action\").item.json.chatId }}",
+            "state": "idle",
+            "prompt": "",
+            "images_json": "[]"
+          },
+          "schema": [
+            {
+              "id": "telegram_id",
+              "displayName": "telegram_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "prompt",
+              "displayName": "prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "images_json",
+              "displayName": "images_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b87b18b6-25a1-47ca-a55c-074ee39cf7ea",
+      "name": "Reset State",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3136,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendVideo",
+        "chatId": "={{ $(\"Decide Action\").item.json.chatId }}",
+        "file": "={{ $(\"Get Result\").item.json.video.url }}",
+        "additionalFields": {
+          "caption": "Your video is ready!"
+        }
+      },
+      "id": "46b3b871-687d-4a5b-8bff-efd7b9887260",
+      "name": "Send Video",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3360,
+        464
+      ],
+      "webhookId": "14d35774-00c3-4304-8a30-910ddf2e7c7b",
+      "credentials": {
+        "telegramApi": {
+          "id": "V5XIOl3fJahvQ2le",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Decide Action\").item.json.chatId }}",
+        "text": "Still rendering your video... please hold on.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": true
+        }
+      },
+      "id": "ef199e96-0630-415f-9f99-06a6007c362f",
+      "name": "Progress Update",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2912,
+        672
+      ],
+      "webhookId": "67d60820-19c7-4cca-b84e-436b7c27f8bf",
+      "credentials": {
+        "telegramApi": {
+          "id": "V5XIOl3fJahvQ2le",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $(\"Decide Action\").item.json.chatId }}",
+        "text": "={{ $(\"Decide Action\").item.json.replyText }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "985a8e7a-9fba-44c1-ab2d-c2de4f60c81b",
+      "name": "Send Guidance",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        768
+      ],
+      "webhookId": "526e4f6f-c5e1-43b3-93b4-dce7a93a12f8",
+      "credentials": {
+        "telegramApi": {
+          "id": "V5XIOl3fJahvQ2le",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Update": {
+      "main": [
+        [
+          {
+            "node": "Get State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get State": {
+      "main": [
+        [
+          {
+            "node": "Decide Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decide Action": {
+      "main": [
+        [
+          {
+            "node": "Route Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Action": {
+      "main": [
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Awaiting Images",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Collect Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Generating",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Guidance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Awaiting Images": {
+      "main": [
+        [
+          {
+            "node": "Send Images Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Image": {
+      "main": [
+        [
+          {
+            "node": "Send Image Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Generating": {
+      "main": [
+        [
+          {
+            "node": "Notify Generating",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Generating": {
+      "main": [
+        [
+          {
+            "node": "Get Seed Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Seed Image": {
+      "main": [
+        [
+          {
+            "node": "Prepare Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Request": {
+      "main": [
+        [
+          {
+            "node": "Submit Fal Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit Fal Job": {
+      "main": [
+        [
+          {
+            "node": "Wait For Render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Render": {
+      "main": [
+        [
+          {
+            "node": "Poll Fal Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Fal Job": {
+      "main": [
+        [
+          {
+            "node": "Is Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Done": {
+      "main": [
+        [
+          {
+            "node": "Get Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Progress Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Result": {
+      "main": [
+        [
+          {
+            "node": "Reset State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset State": {
+      "main": [
+        [
+          {
+            "node": "Send Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Progress Update": {
+      "main": [
+        [
+          {
+            "node": "Wait For Render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "default",
+    "availableInMCP": false
+  },
+  "versionId": "385d2dab-454e-4c1d-8a20-1b72486fea28",
+  "meta": {
+    "instanceId": "d4bd61b95c8d84f553de570332716d6c78f443038f09a91adcec9ae1eba1c32a"
+  },
+  "nodeGroups": [],
+  "id": "Qs2QNWIIwVXcFjHj",
+  "tags": []
+}
