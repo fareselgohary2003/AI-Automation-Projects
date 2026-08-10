@@ -1,4 +1,4 @@
-# 🤖 AI News → LinkedIn Automation
+#  AI News → LinkedIn Automation
 
 An n8n workflow that finds the latest AI news from the last 24 hours, uses AI to turn the most relevant story into a LinkedIn post, fact-checks it, and sends it to Telegram for approval before publishing.
 
