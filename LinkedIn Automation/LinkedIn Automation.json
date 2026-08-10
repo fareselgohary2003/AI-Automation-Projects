@@ -1,0 +1,432 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 12,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "id": "3ad0df2a-b991-4d60-bf4b-b6ec1f1baa6c",
+      "name": "Schedule — Daily 5 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -2720,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://news.google.com/rss/search?q=(%22artificial%20intelligence%22%20OR%20%22generative%20AI%22%20OR%20LLM%20OR%20OpenAI%20OR%20Anthropic)%20when:1d&hl=en-US&gl=US&ceid=US:en",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (n8n AI News Bot)"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "dec5e4f2-1332-4cf6-aa7a-5d277127d131",
+      "name": "Get AI News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -2400,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "explicitArray": false,
+          "mergeAttrs": true,
+          "normalize": true,
+          "trim": true
+        }
+      },
+      "id": "6414136c-1dcd-4cea-a3ad-032c9075acd2",
+      "name": "Parse RSS",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        -2016,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json || {};\nconst channel = j.rss && j.rss.channel ? j.rss.channel : (j.channel || {});\nlet items = channel.item || [];\nif (!Array.isArray(items)) items = [items];\nconst parsed = items.filter(a => a && a.title && a.link).map(a => {\n  const title = typeof a.title === 'string' ? a.title : (a.title && a.title._ ? a.title._ : '');\n  const link = typeof a.link === 'string' ? a.link : (a.link && a.link._ ? a.link._ : '');\n  const pub = a.pubDate || '';\n  let source = '';\n  if (a.source) source = typeof a.source === 'string' ? a.source : (a.source._ || a.source.url || '');\n  return { title: title.trim(), url: link.trim(), source: source, published_at: pub, ts: pub ? Date.parse(pub) : 0 };\n});\nif (!parsed.length) { throw new Error('No AI news found today'); }\nparsed.sort((x, y) => (y.ts || 0) - (x.ts || 0));\nconst best = parsed[0];\nreturn [{ json: { title: best.title, url: best.url, source: best.source, published_at: best.published_at } }];"
+      },
+      "id": "894dbda2-19d8-4d62-8d41-0adb49258705",
+      "name": "Pick Latest Story",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1648,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an AI/ML technical content writer. Write ONE professional LinkedIn post about the AI news item provided.\nBase the post ONLY on the given information — never invent facts, statistics, quotes, or capabilities.\nStyle: natural, professional, concise, human-sounding (not marketing fluff). Start with a strong hook, explain what happened and why it matters, include the source link, and add 3-5 relevant hashtags.\nReturn ONLY JSON: { \"post\": \"...\", \"title\": \"...\", \"source_url\": \"...\" }"
+            },
+            {
+              "content": "=AI news item:\nTitle: {{ $json.title }}\nSource: {{ $json.source }}\nPublished: {{ $json.published_at }}\nSource URL: {{ $json.url }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 4000,
+          "textFormat": {
+            "textOptions": {
+              "type": "json_object"
+            }
+          }
+        }
+      },
+      "id": "c7dd00bb-f149-4e80-ab88-3bb7a94e04cc",
+      "name": "Generate LinkedIn Post",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        -1408,
+        208
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "uvd6VoqxcRng7NaN",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function extractText(j){\n  if(!j) return '';\n  if(typeof j==='string') return j;\n  if(Array.isArray(j.output)){ const p=[]; for(const o of j.output){ if(Array.isArray(o.content)){ for(const c of o.content){ if(c && c.text!=null) p.push(typeof c.text==='string'?c.text:JSON.stringify(c.text)); } } } if(p.length) return p.join(''); }\n  if(typeof j.text==='string') return j.text;\n  if(j.message && typeof j.message.content==='string') return j.message.content;\n  return JSON.stringify(j);\n}\nconst text = extractText($('Generate LinkedIn Post').item.json).replace(/```json/gi,'').replace(/```/g,'').trim();\nlet obj; try { obj = JSON.parse(text); } catch(e){ throw new Error('Malformed LLM JSON: ' + e.message); }\nconst src = $('Pick Latest Story').item.json;\nreturn [{ json: {\n  post: (obj.post || '').toString(),\n  title: (obj.title || src.title || '').toString(),\n  source_url: (obj.source_url || src.url || '').toString()\n} }];"
+      },
+      "id": "6d6d32d4-6c34-4536-a69d-6c11209b3ea1",
+      "name": "Parse Post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -992,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "1404059474",
+        "message": "=🚀 New AI News LinkedIn Post\n\nTopic: {{ $json.title }}\n\n{{ $json.post }}\n\nSource: {{ $json.source_url }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "✅ APPROVE",
+            "disapproveLabel": "❌ REJECT"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 12
+            }
+          }
+        }
+      },
+      "id": "a3a5acdd-08a1-434e-b54c-49ae45e8aeed",
+      "name": "Request Approval",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -672,
+        192
+      ],
+      "webhookId": "66896923-ba63-4df4-bea6-dc96daf50dd2",
+      "credentials": {
+        "telegramApi": {
+          "id": "iKB0FuDjqWSz0RDq",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "a",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e4fb3d2b-18a4-40d2-a2a9-960e53e023ac",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -448,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "person": "Z1BP7ESTbl",
+        "text": "={{ $('Parse Post').item.json.post }}",
+        "additionalFields": {
+          "visibility": "PUBLIC"
+        }
+      },
+      "id": "d1ba3792-c644-4077-8859-e9b54fd73042",
+      "name": "Publish to LinkedIn",
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        -288,
+        0
+      ],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "HUDa2hDqFIEbCnKU",
+          "name": "LinkedIn account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "1404059474",
+        "text": "=✅ Published to LinkedIn: {{ $('Parse Post').item.json.title }}",
+        "additionalFields": {}
+      },
+      "id": "89dba91c-5780-4adb-9eac-9afd9fb42860",
+      "name": "Notify Published",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "0ec14612-7300-41c5-a1e2-9da3f1414f6d",
+      "credentials": {
+        "telegramApi": {
+          "id": "iKB0FuDjqWSz0RDq",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "1404059474",
+        "text": "=🚨 LinkedIn publishing failed. {{ $json.error && $json.error.message ? $json.error.message : 'API error' }}",
+        "additionalFields": {}
+      },
+      "id": "bea89ddc-22b4-4a15-b51d-6def8193cd38",
+      "name": "Notify LinkedIn Error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        192
+      ],
+      "webhookId": "7ba178cb-af1f-4e43-bb4b-6ee40ce7e288",
+      "credentials": {
+        "telegramApi": {
+          "id": "iKB0FuDjqWSz0RDq",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "1404059474",
+        "text": "❌ Post rejected. Nothing was published.",
+        "additionalFields": {}
+      },
+      "id": "410c693c-4b57-4705-b0dd-a5ea6eec0966",
+      "name": "Notify Rejected",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -224,
+        288
+      ],
+      "webhookId": "831f1204-ed59-438e-ac18-54b89b1ea111",
+      "credentials": {
+        "telegramApi": {
+          "id": "iKB0FuDjqWSz0RDq",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule — Daily 5 AM": {
+      "main": [
+        [
+          {
+            "node": "Get AI News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get AI News": {
+      "main": [
+        [
+          {
+            "node": "Parse RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse RSS": {
+      "main": [
+        [
+          {
+            "node": "Pick Latest Story",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Latest Story": {
+      "main": [
+        [
+          {
+            "node": "Generate LinkedIn Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate LinkedIn Post": {
+      "main": [
+        [
+          {
+            "node": "Parse Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Post": {
+      "main": [
+        [
+          {
+            "node": "Request Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Approval": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Publish to LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish to LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Notify Published",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify LinkedIn Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "75a9fe2c-6f6b-46eb-a717-6b1f066881a7",
+  "meta": {
+    "instanceId": "3c50b084a05bfcf4c844e4d15ff67eac3fae6bc0bc925cfc4f72ebd7f1c7d025"
+  },
+  "nodeGroups": [],
+  "id": "hM3YHW30XE13LD4w",
+  "tags": []
+}
