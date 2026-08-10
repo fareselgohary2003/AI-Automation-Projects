@@ -4,7 +4,7 @@ An n8n workflow that finds the latest AI news from the last 24 hours, uses AI to
 
 **Find → Create → Review → Publish**
 
-![Workflow](workflow.png)
+![Workflow](workflow.png.png)
 
 ### Tech Stack
 - n8n
